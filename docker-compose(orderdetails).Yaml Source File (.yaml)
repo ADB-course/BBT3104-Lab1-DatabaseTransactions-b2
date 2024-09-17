@@ -1,1 +1,121 @@
+jumab@BRUMA MINGW64 ~/OneDrive/Documents/GitHub/BBT3104-Lab1-DatabaseTransactions-b2 (main)
+$ docker exec -it mysql-8.3.0-bbt3104 mysql -u root -p
+Enter password:
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 10
 
+Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> SHOW VARIABLES LIKE 'autocommit';
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| autocommit    | OFF   |
++---------------+-------+
+1 row in set (0.32 sec)
+
+mysql> SHOW VARIABLES LIKE 'transaction_isolation';
++-----------------------+--------------+
+| Variable_name         | Value        |
++-----------------------+--------------+
+| transaction_isolation | SERIALIZABLE |
++-----------------------+--------------+
+1 row in set (0.26 sec)
+
+mysql> SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+Query OK, 0 rows affected (0.03 sec)
+
+mysql> USE classicmodels;
+Database changed
+mysql> START TRANSACTION;
+Query OK, 0 rows affected (0.02 sec)
+
+mysql> SET @orderNumber = (SELECT MAX(orderNumber)+1 FROM orders);
+Query OK, 0 rows affected (0.22 sec)
+
+mysql> INSERT INTO orders(orderNumber,
+    -> orderDate,
+    -> requiredDate,
+    -> shippedDate,
+    -> status,
+    -> customerNumber)
+    ->
+    -> VALUES(@orderNumber,
+    -> DATE(NOW()),
+    -> DATE(DATE_ADD(NOW(), INTERVAL 3 DAY)),
+    -> DATE(DATE_ADD(NOW(), INTERVAL 2 DAY)),
+    -> 'In Process',
+    -> 145);
+Query OK, 1 row affected (0.07 sec)
+
+mysql> SAVEPOINT before_product_1;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> INSERT INTO orderdetails(orderNumber, productCode, quantityOrdered, priceEach, orderLineNumber)
+    -> VALUES(@orderNumber,'S18_1749', 2724, '136', 1);
+Query OK, 1 row affected (0.05 sec)
+
+mysql> SET @quantityInStock = (SELECT quantityInStock FROM products WHERE `productCode` = 'S18_1749');
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> UPDATE `products` SET `quantityInStock` = @quantityInStock - 2724 WHERE `productCode` = 'S18_1749';
+Query OK, 1 row affected (0.01 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+
+mysql> SAVEPOINT before_product_2;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> INSERT INTO orderdetails(orderNumber, productCode, quantityOrdered, priceEach, orderLineNumber)
+    -> VALUES(@orderNumber,'S18_2248', 540, '55.09', 2);
+Query OK, 1 row affected (0.01 sec)
+
+mysql> SET @quantityInStock = (SELECT quantityInStock FROM products WHERE `productCode` = 'S18_2248');
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> UPDATE `products` SET `quantityInStock` = @quantityInStock - 540 WHERE `productCode` = 'S18_2248';
+Query OK, 1 row affected (0.01 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+
+mysql> ROLLBACK TO SAVEPOINT before_product_2;
+Query OK, 0 rows affected (0.02 sec)
+
+mysql> SAVEPOINT before_product_3;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> INSERT INTO orderdetails(orderNumber, productCode, quantityOrdered, priceEach, orderLineNumber)
+    -> VALUES(@orderNumber,'S12_1099', 68, '95.34', 3);
+Query OK, 1 row affected (0.00 sec)
+
+mysql> SET @quantityInStock = (SELECT quantityInStock FROM products WHERE `productCode` = 'S12_1099');
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> UPDATE `products` SET `quantityInStock` = @quantityInStock - 68 WHERE `productCode` = 'S12_1099';
+Query OK, 1 row affected (0.02 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+
+mysql> INSERT INTO payments
+    -> (customerNumber, checkNumber, paymentDate, amount)
+    -> VALUES (145, 'JM555210', DATE(NOW()), 300000);
+Query OK, 1 row affected (0.02 sec)
+
+mysql> COMMIT;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> SELECT *
+    -> FROM
+    -> classicmodels.orderdetails
+    -> WHERE
+    -> orderNumber = 10426;
++-------------+-------------+-----------------+-----------+-----------------+
+| orderNumber | productCode | quantityOrdered | priceEach | orderLineNumber |
++-------------+-------------+-----------------+-----------+-----------------+
+|       10426 | S12_1099    |              68 |     95.34 |               3 |
+|       10426 | S18_1749    |            2724 |    136.00 |               1 |
++-------------+-------------+-----------------+-----------+-----------------+
+2 rows in set (0.01 sec)
